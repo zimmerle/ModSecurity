@@ -1,0 +1,53 @@
+name: QA - Memory Check
+on: 
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit ref
+        default: v3/master
+        required: true
+jobs:
+  build-linux:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04]
+        platform: [x32]
+        compiler: [gcc]
+#        platform: [x32, x64]
+#        compiler: [gcc, clang]
+        configure:
+          - {label: "with parser generation", opt: "--enable-parser-generation" }
+#          - {label: "without curl",    opt: "--without-curl" }
+#          - {label: "without yajl",    opt: "--without-yajl" }
+#          - {label: "without geoip",   opt: "--without-geoip" }
+#          - {label: "without lmdb",    opt: "--without-lmdb" }
+#          - {label: "without ssdeep",  opt: "--without-ssdeep" }
+#          - {label: "without lua",     opt: "--without-lua" }
+#          - {label: "without maxmind", opt: "--without-maxmind" }
+    steps:
+      - name: Setup Dependencies
+        run: |
+          sudo add-apt-repository --yes ppa:maxmind/ppa
+          sudo apt-get update -y -qq
+          sudo apt-get install -y libfuzzy-dev libyajl-dev libgeoip-dev liblua5.2-dev liblmdb-dev cppcheck libmaxminddb-dev libcurl4-openssl-dev valgrind
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.inputs.ref }}
+          submodules: true
+      - name: build.sh
+        run: ./build.sh
+      - name: configure ${{ matrix.configure.label }}
+        run: ./configure ${{ matrix.configure.opt }} --enable-valgrind
+      - name: make
+        run: make -j `nproc`
+      - name: check
+        run: make check
+      - name: check-valgrind
+        run: make check-valgrind
+      - name: tool drd
+        run: cat test-suite-drd.log
+      - name: tool helgrind
+        run: cat test-suite-helgrind.log
+      - name: tool memcheck
+        run: cat test-suite-memcheck.log
